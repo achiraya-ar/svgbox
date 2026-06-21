@@ -63,9 +63,10 @@
                 <!-- Left: SVG Preview -->
                 <div>
                     <div
-                        class="bg-surface rounded-2xl border border-border p-8 flex items-center justify-center min-h-[320px] relative group shadow-sm"
+                        class="rounded-2xl border border-border p-8 flex items-center justify-center min-h-[320px] relative group shadow-sm transition-colors duration-200"
+                        :style="{ background: previewBackgroundStyle }"
                     >
-                        <!-- Checkerboard pattern hint for transparency -->
+                        <!-- SVG Preview -->
                         <div
                             class="w-full h-full flex items-center justify-center"
                             v-html="sanitizedSvg"
@@ -78,6 +79,40 @@
                                 class="text-xs font-prompt text-textsecondary bg-soft px-2 py-1 rounded-lg"
                                 >SVG Preview</span
                             >
+                        </div>
+                    </div>
+
+                    <!-- Background picker (preview only) -->
+                    <div class="mt-4">
+                        <label
+                            class="block text-sm font-medium text-textprimary font-prompt mb-2"
+                        >
+                            Background
+                            <span class="text-[11px] font-normal text-textsecondary ml-1">
+                                (preview only)
+                            </span>
+                        </label>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="bg in backgroundOptions"
+                                :key="bg.key"
+                                @click="selectedBackground = bg.key"
+                                :title="bg.label"
+                                :class="[
+                                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-prompt font-medium transition-all duration-150 border',
+                                    selectedBackground === bg.key
+                                        ? 'border-accent ring-2 ring-accent/20'
+                                        : 'border-border hover:border-accent/60',
+                                ]"
+                            >
+                                <span
+                                    :class="[
+                                        'w-4 h-4 rounded border border-border shrink-0',
+                                        bg.swatchClass,
+                                    ]"
+                                />
+                                {{ bg.label }}
+                            </button>
                         </div>
                     </div>
 
@@ -215,6 +250,38 @@
                         อยู่ในรายการโปรด
                     </div>
 
+                    <!-- Visibility / Approval Status Badges -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span
+                            v-if="asset.status === 'pending'"
+                            class="inline-flex items-center gap-1.5 text-xs font-prompt font-medium text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full"
+                        >
+                            <Clock :size="12" />
+                            Pending
+                        </span>
+                        <span
+                            v-else-if="asset.status === 'rejected'"
+                            class="inline-flex items-center gap-1.5 text-xs font-prompt font-medium text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full"
+                        >
+                            <X :size="12" />
+                            Rejected
+                        </span>
+                        <span
+                            v-else-if="asset.is_private"
+                            class="inline-flex items-center gap-1.5 text-xs font-prompt font-medium text-secondary bg-soft border border-border px-2.5 py-1 rounded-full"
+                        >
+                            <Lock :size="12" />
+                            Private
+                        </span>
+                        <span
+                            v-else
+                            class="inline-flex items-center gap-1.5 text-xs font-prompt font-medium text-green-600 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full"
+                        >
+                            <Check :size="12" />
+                            Public
+                        </span>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="space-y-3">
                         <p
@@ -230,7 +297,7 @@
                                 class="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-accent text-white text-sm font-prompt font-medium hover:bg-accent/90 shadow-sm hover:shadow-md transition-all duration-200"
                             >
                                 <Download :size="16" />
-                                {{ t("svgDetail.actions.download") }}
+                                Download
                             </button>
 
                             <!-- Copy SVG Code -->
@@ -325,6 +392,108 @@
                                 <Trash2 :size="15" />
                                 {{ t("svgDetail.owner.delete") }}
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- Admin Approval Actions -->
+                    <div
+                        v-if="isAdmin && canManage && (asset.status !== 'approved' || asset.is_private)"
+                        class="bg-purple-50/60 border border-purple-200 rounded-2xl p-4 space-y-3"
+                    >
+                        <div class="flex items-center justify-between gap-2">
+                            <p
+                                class="text-sm font-semibold text-purple-700 font-prompt flex items-center gap-1.5"
+                            >
+                                <Shield :size="14" class="text-purple-500" />
+                                Review
+                            </p>
+                            <span
+                                class="text-[10px] font-prompt font-semibold text-purple-700 bg-white border border-purple-200 px-2 py-0.5 rounded-full uppercase tracking-wide"
+                            >Admin</span>
+                        </div>
+
+                        <!-- Status actions: Approve / Reject (only if not yet approved) -->
+                        <div
+                            v-if="asset.status === 'pending' || asset.status === 'rejected'"
+                            class="grid grid-cols-2 gap-2"
+                        >
+                            <button
+                                v-if="asset.status === 'pending'"
+                                @click="handleQuickApprove"
+                                :disabled="adminActionLoading"
+                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-500 text-white text-sm font-prompt font-medium hover:bg-green-600 shadow-sm transition-all duration-200 disabled:opacity-50"
+                            >
+                                <Loader2
+                                    v-if="adminActionLoading"
+                                    :size="15"
+                                    class="animate-spin"
+                                />
+                                <Check v-else :size="15" />
+                                Approve
+                            </button>
+                            <button
+                                v-if="asset.status === 'rejected'"
+                                @click="handleQuickReject"
+                                :disabled="adminActionLoading"
+                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-orange-500 text-sm font-prompt font-medium hover:bg-orange-500 hover:text-white border border-orange-200 transition-all duration-200 disabled:opacity-50"
+                            >
+                                <Loader2
+                                    v-if="adminActionLoading"
+                                    :size="15"
+                                    class="animate-spin"
+                                />
+                                <XCircle v-else :size="15" />
+                                Reject
+                            </button>
+                        </div>
+
+                        <!-- Visibility toggle (only when approved) -->
+                        <div
+                            v-if="asset.status === 'approved'"
+                            class="pt-2 border-t border-purple-200/70 space-y-2"
+                        >
+                            <p
+                                class="text-xs text-purple-700 font-prompt flex items-center gap-1.5"
+                            >
+                                <Eye :size="13" class="text-purple-500" />
+                                Visibility
+                            </p>
+                            <button
+                                @click="handleToggleVisibility"
+                                :disabled="adminActionLoading"
+                                :class="[
+                                    'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-prompt font-medium border transition-all duration-200 disabled:opacity-50',
+                                    asset.is_private
+                                        ? 'bg-purple-500 text-white border-purple-500 hover:bg-purple-600 shadow-sm'
+                                        : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-500 hover:text-white',
+                                ]"
+                            >
+                                <Loader2
+                                    v-if="adminActionLoading"
+                                    :size="15"
+                                    class="animate-spin"
+                                />
+                                <Unlock
+                                    v-else-if="!asset.is_private"
+                                    :size="15"
+                                    class="-scale-x-100"
+                                />
+                                <Lock v-else :size="15" />
+                                {{
+                                    asset.is_private
+                                        ? "Make Public"
+                                        : "Make Private"
+                                }}
+                            </button>
+                            <p
+                                class="text-[11px] text-purple-600/80 font-prompt leading-relaxed"
+                            >
+                                {{
+                                    asset.is_private
+                                        ? "Currently private — only the owner can see this."
+                                        : "Currently public — visible in the home page."
+                                }}
+                            </p>
                         </div>
                     </div>
 
@@ -640,6 +809,15 @@
                 </Transition>
             </Teleport>
 
+            <!-- Download Menu Modal -->
+            <DownloadMenu
+                v-if="asset"
+                v-model="downloadMenuOpen"
+                :svg-code="asset.svg_code"
+                :filename="asset.name"
+                @downloaded="handleDownloaded"
+            />
+
             <!-- Toast -->
             <ToastNotification
                 v-if="toast.message"
@@ -677,14 +855,18 @@ import {
     AlertCircle,
     User2,
     ExternalLink,
+    XCircle,
+    Lock,
+    Unlock,
+    Eye,
 } from "lucide-vue-next";
 import DefaultLayout from "../layouts/DefaultLayout.vue";
 import ToastNotification from "../components/ToastNotification.vue";
+import DownloadMenu from "../components/DownloadMenu.vue";
 import { useAuth } from "../composables/useAuth";
 import { useSvgAssets } from "../composables/useSvgAssets";
 import {
     sanitizeSvg,
-    downloadSvg,
     copySvgToClipboard,
 } from "../utils/svgUtils";
 import type { SvgAsset } from "../types";
@@ -693,7 +875,7 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const { user: currentUser, isAdmin } = useAuth();
-const { fetchById, update, remove, toggleFavorite } = useSvgAssets();
+const { fetchById, update, remove, toggleFavorite, adminReview } = useSvgAssets();
 
 const asset = ref<SvgAsset | null>(null);
 const loading = ref(true);
@@ -701,12 +883,16 @@ const copied = ref(false);
 const showCode = ref(false);
 const editModalOpen = ref(false);
 const confirmDeleteOpen = ref(false);
+const downloadMenuOpen = ref(false);
 
 // Lock body scroll when any modal is open so background content can't be
 // scrolled, and to prevent the stacking-context issues that can cause clicks
 // to land on the wrong element.
 const anyModalOpen = computed(
-    () => editModalOpen.value || confirmDeleteOpen.value,
+    () =>
+        editModalOpen.value ||
+        confirmDeleteOpen.value ||
+        downloadMenuOpen.value,
 );
 watch(anyModalOpen, (open) => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -719,6 +905,7 @@ onBeforeUnmount(() => {
 const isUpdating = ref(false);
 const isDeleting = ref(false);
 const favoriteLoading = ref(false);
+const adminActionLoading = ref(false);
 const editError = ref("");
 const editTagsInput = ref("");
 
@@ -752,6 +939,65 @@ const isOwner = computed(() => {
 });
 
 const canManage = computed(() => isOwner.value || isAdmin.value);
+
+// ── Background picker (preview only) ─────────────────────────────────────
+type PreviewBg = "white" | "black" | "gray" | "gradient" | "transparent" | "checkerboard";
+const backgroundOptions: {
+    key: PreviewBg;
+    label: string;
+    swatchClass: string;
+    previewStyle: string;
+}[] = [
+    {
+        key: "white",
+        label: "White",
+        swatchClass: "bg-white",
+        previewStyle: "#FFFFFF",
+    },
+    {
+        key: "black",
+        label: "Black",
+        swatchClass: "bg-black",
+        previewStyle: "#000000",
+    },
+    {
+        key: "gray",
+        label: "Gray",
+        swatchClass: "bg-soft",
+        previewStyle: "#DFE6E9",
+    },
+    {
+        key: "gradient",
+        label: "Gradient",
+        swatchClass:
+            "bg-[linear-gradient(135deg,#667eea_0%,#764ba2_100%)]",
+        previewStyle:
+            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    },
+    {
+        key: "transparent",
+        label: "Transparent",
+        swatchClass:
+            "[background-image:linear-gradient(45deg,#d1d5db_25%,transparent_25%),linear-gradient(-45deg,#d1d5db_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#d1d5db_75%),linear-gradient(-45deg,transparent_75%,#d1d5db_75%)] [background-size:8px_8px] [background-position:0_0,0_4px,4px_-4px,-4px_0px] bg-white",
+        previewStyle:
+            "repeating-conic-gradient(#d1d5db 0 25%, #ffffff 0 50%) 0 0 / 16px 16px",
+    },
+    {
+        key: "checkerboard",
+        label: "Checker",
+        swatchClass:
+            "[background-image:linear-gradient(45deg,#9ca3af_25%,transparent_25%),linear-gradient(-45deg,#9ca3af_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#9ca3af_75%),linear-gradient(-45deg,transparent_75%,#9ca3af_75%)] [background-size:8px_8px] [background-position:0_0,0_4px,4px_-4px,-4px_0px] bg-white",
+        previewStyle:
+            "repeating-conic-gradient(#9ca3af 0 25%, #e5e7eb 0 50%) 0 0 / 16px 16px",
+    },
+];
+const selectedBackground = ref<PreviewBg>("white");
+const previewBackgroundStyle = computed(() => {
+    const opt = backgroundOptions.find(
+        (b) => b.key === selectedBackground.value,
+    );
+    return opt?.previewStyle ?? "#FFFFFF";
+});
 
 const sanitizedSvg = computed(() => {
     if (!asset.value?.svg_code) return "";
@@ -787,7 +1033,10 @@ const formatDate = (dateStr: string): string => {
 
 const handleDownload = () => {
     if (!asset.value) return;
-    downloadSvg(asset.value.svg_code, asset.value.name);
+    downloadMenuOpen.value = true;
+};
+
+const handleDownloaded = () => {
     showToast(t("svgDetail.toast.downloaded"), "success");
 };
 
@@ -917,6 +1166,66 @@ const handleDelete = async () => {
         confirmDeleteOpen.value = false;
     } finally {
         isDeleting.value = false;
+    }
+};
+
+const handleQuickApprove = async () => {
+    if (!asset.value) return;
+    adminActionLoading.value = true;
+    try {
+        await adminReview(asset.value.id, "approved", !asset.value.is_private);
+        // Refresh local asset
+        const refreshed = await fetchById(asset.value.id);
+        if (refreshed) asset.value = refreshed;
+        showToast(t("svgDetail.toast.approved"), "success");
+    } catch (e: unknown) {
+        showToast(
+            e instanceof Error ? e.message : t("svgDetail.toast.error"),
+            "error",
+        );
+    } finally {
+        adminActionLoading.value = false;
+    }
+};
+
+const handleQuickReject = async () => {
+    if (!asset.value) return;
+    adminActionLoading.value = true;
+    try {
+        await adminReview(asset.value.id, "rejected", asset.value.is_private);
+        const refreshed = await fetchById(asset.value.id);
+        if (refreshed) asset.value = refreshed;
+        showToast(t("svgDetail.toast.rejected"), "success");
+    } catch (e: unknown) {
+        showToast(
+            e instanceof Error ? e.message : t("svgDetail.toast.error"),
+            "error",
+        );
+    } finally {
+        adminActionLoading.value = false;
+    }
+};
+
+const handleToggleVisibility = async () => {
+    if (!asset.value) return;
+    adminActionLoading.value = true;
+    try {
+        await adminReview(asset.value.id, asset.value.status, !asset.value.is_private);
+        const refreshed = await fetchById(asset.value.id);
+        if (refreshed) asset.value = refreshed;
+        showToast(
+            !asset.value.is_private
+                ? t("svgDetail.toast.madePrivate")
+                : t("svgDetail.toast.madePublic"),
+            "success",
+        );
+    } catch (e: unknown) {
+        showToast(
+            e instanceof Error ? e.message : t("svgDetail.toast.error"),
+            "error",
+        );
+    } finally {
+        adminActionLoading.value = false;
     }
 };
 

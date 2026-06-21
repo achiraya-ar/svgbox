@@ -116,7 +116,13 @@ export function useSvgAssets() {
   // ── READ ────────────────────────────────────────────────────────────────
 
   /**
-   * Fetch all public SVG assets (optionally filtered).
+   * Fetch all SVG assets visible to the current user.
+   *
+   * Visibility rules (enforced by RLS + this client filter):
+   *   - guest  : only status='approved' AND is_private=false
+   *   - user   : everything they own + approved public from others
+   *   - admin  : every row regardless of status/visibility
+   *
    * Attaches creator profile info (username, display_name) to each asset
    * using a single batched profile query — no N+1.
    */
@@ -321,6 +327,27 @@ export function useSvgAssets() {
     await update(id, { is_favorite: !current });
   };
 
+  // ── ADMIN ─────────────────────────────────────────────────────────────
+
+  /**
+   * Admin only — review an SVG asset (approve / reject / set public).
+   * Delegates to the SECURITY DEFINER function svgbox_admin_review_asset
+   * so the trigger svgbox_assets_guard_approval does not block admin updates.
+   */
+  const adminReview = async (
+    id: string,
+    newStatus: "pending" | "approved" | "rejected",
+    newIsPrivate: boolean,
+  ): Promise<void> => {
+    await ensureFreshSession();
+    const { error: err } = await supabase.rpc("svgbox_admin_review_asset", {
+      target_asset_id: id,
+      new_status: newStatus,
+      new_is_private: newIsPrivate,
+    });
+    if (err) throw err;
+  };
+
   return {
     // Shared singleton state
     assets,
@@ -334,5 +361,6 @@ export function useSvgAssets() {
     update,
     remove,
     toggleFavorite,
+    adminReview,
   };
 }

@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS svgbox_assets (
   category     TEXT        NOT NULL DEFAULT 'Other',
   is_favorite  BOOLEAN     NOT NULL DEFAULT FALSE,
   view_count   INTEGER     NOT NULL DEFAULT 0,
+  is_private   BOOLEAN     NOT NULL DEFAULT TRUE,
+  status       TEXT        NOT NULL DEFAULT 'approved'
+                           CONSTRAINT svgbox_assets_status_check
+                             CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -84,6 +88,53 @@ COMMENT ON TABLE  svgbox_assets            IS 'SVGBox — SVG assets ที่�
 COMMENT ON COLUMN svgbox_assets.svg_code   IS 'Raw SVG markup';
 COMMENT ON COLUMN svgbox_assets.tags       IS 'Array of tag strings';
 COMMENT ON COLUMN svgbox_assets.view_count IS 'จำนวนครั้งที่ถูกเปิดดู (detail page)';
+-- NOTE: COMMENT ON COLUMN is_private / status ถูกย้ายไปไว้หลัง
+-- ADD COLUMN IF NOT EXISTS ด้านล่าง เพื่อกัน error "column does not exist"
+-- ตอนรันบน DB เก่าที่มี table อยู่แล้วแต่ยังไม่มี column ใหม่
+
+-- ── Add new columns for existing databases (idempotent) ──
+-- ต้องรันก่อน COMMENT ON COLUMN และ RLS policies
+-- เพื่อให้ column ถูกสร้างก่อนที่จะมีคนอ้างถึง
+ALTER TABLE svgbox_assets ADD COLUMN IF NOT EXISTS is_private BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE svgbox_assets ADD COLUMN IF NOT EXISTS status     TEXT    NOT NULL DEFAULT 'approved';
+
+-- ตั้ง COMMENT หลังจาก column ถูกสร้างแน่นอนแล้ว
+-- COMMENT ON รันซ้ำได้ (update in place) และไม่ error ถ้า column มีอยู่
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE  table_schema = 'public'
+      AND  table_name   = 'svgbox_assets'
+      AND  column_name  = 'is_private'
+  ) THEN
+    COMMENT ON COLUMN svgbox_assets.is_private IS 'TRUE = private (เห็นเฉพาะเจ้าของ), FALSE = public (รออนุมัติ)';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE  table_schema = 'public'
+      AND  table_name   = 'svgbox_assets'
+      AND  column_name  = 'status'
+  ) THEN
+    COMMENT ON COLUMN svgbox_assets.status IS 'pending = รอ admin อนุมัติ, approved = แสดงสาธารณะ, rejected = ถูกปฏิเสธ';
+  END IF;
+END
+$$;
+
+-- Backfill status for existing rows that may not have the constraint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE  conname = 'svgbox_assets_status_check'
+  ) THEN
+    ALTER TABLE svgbox_assets
+      ADD CONSTRAINT svgbox_assets_status_check
+      CHECK (status IN ('pending', 'approved', 'rejected'));
+  END IF;
+END
+$$;
 
 
 -- ── svgbox_favorites ──────────────────────────────────────────
@@ -147,6 +198,12 @@ CREATE INDEX IF NOT EXISTS svgbox_assets_category_idx
 
 CREATE INDEX IF NOT EXISTS svgbox_assets_created_at_idx
   ON svgbox_assets(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS svgbox_assets_status_idx
+  ON svgbox_assets(status);
+
+CREATE INDEX IF NOT EXISTS svgbox_assets_visibility_idx
+  ON svgbox_assets(is_private, status);
 
 CREATE INDEX IF NOT EXISTS svgbox_assets_tags_idx
   ON svgbox_assets USING GIN(tags);
@@ -363,6 +420,47 @@ COMMENT ON FUNCTION svgbox_increment_view_count IS
   'เพิ่ม view_count ทีละ 1 — เรียกผ่าน RPC เพื่อให้ guest สามารถเรียกได้';
 
 
+-- ── Admin: review an SVG (approve / reject / toggle visibility) ──
+-- ใช้สำหรับให้ admin อนุมัติ SVG ของ user อื่น
+-- เรียกจาก frontend ผ่าน supabase.rpc('svgbox_admin_review_asset', {
+--   target_asset_id: '...',
+--   new_status: 'approved' | 'rejected' | 'pending',
+--   new_is_private: true | false
+-- })
+
+CREATE OR REPLACE FUNCTION svgbox_admin_review_asset(
+  target_asset_id UUID,
+  new_status      TEXT,
+  new_is_private  BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NOT svgbox_is_admin() THEN
+    RAISE EXCEPTION 'Unauthorized: admin access required';
+  END IF;
+
+  IF new_status NOT IN ('pending', 'approved', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid status: must be pending, approved, or rejected';
+  END IF;
+
+  UPDATE svgbox_assets
+  SET    status     = new_status,
+         is_private = new_is_private
+  WHERE  id = target_asset_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Asset not found';
+  END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION svgbox_admin_review_asset IS
+  'Admin only — อนุมัติ/ปฏิเสธ SVG และเปลี่ยนสถานะ public/private';
+
+
 -- ── Get assets with per-user favorite flag ─────────────────────
 
 CREATE OR REPLACE FUNCTION svgbox_get_assets_with_favorites(
@@ -410,6 +508,12 @@ AS $$
     (p_search   IS NULL OR a.name     ILIKE '%' || p_search || '%')
     AND (p_category IS NULL OR a.category = p_category)
     AND (p_tag      IS NULL OR a.tags    @> ARRAY[p_tag])
+    -- เจ้าของ/แอดมินเห็นทุกอย่าง, คนทั่วไปเห็นเฉพาะ approved + public
+    AND (
+      a.user_id = auth.uid()
+      OR svgbox_is_admin()
+      OR (a.status = 'approved' AND a.is_private = FALSE)
+    )
   ORDER  BY a.created_at DESC
   LIMIT  p_limit
   OFFSET p_offset;
@@ -496,22 +600,36 @@ DROP POLICY IF EXISTS "svgbox_assets: owner or admin update"   ON svgbox_assets;
 DROP POLICY IF EXISTS "svgbox_assets: owner delete"            ON svgbox_assets;
 DROP POLICY IF EXISTS "svgbox_assets: owner or admin delete"   ON svgbox_assets;
 
--- ทุกคน (รวมถึง guest) ดู SVG ได้
+-- นโยบายการมองเห็น:
+--   - เจ้าของ: เห็น SVG ทุกตัวของตัวเองทุกสถานะ (รวม pending/rejected)
+--   - admin: เห็นทั้งหมดทุกสถานะ
+--   - public: เห็นเฉพาะ status='approved' AND is_private=false
 CREATE POLICY "svgbox_assets: public read"
   ON svgbox_assets FOR SELECT
-  USING (TRUE);
+  USING (
+    auth.uid() = user_id                                  -- เจ้าของเห็นทุกตัวของตัวเอง
+    OR svgbox_is_admin()                                  -- admin เห็นทั้งหมด
+    OR (status = 'approved' AND is_private = FALSE)       -- public เห็นเฉพาะ approved + public
+  );
 
 -- เฉพาะผู้ที่ login แล้วอัปโหลด โดยใช้ user_id ของตัวเอง
 -- ใช้ auth.uid() IS NOT NULL แทน auth.role() = 'authenticated'
 -- เพื่อความเข้ากันได้กับทุก Supabase plan และป้องกัน edge-case JWT
+-- ผู้ใช้ทั่วไป insert ต้องมี status='pending' เท่านั้น (admin เท่านั้นที่อนุมัติ)
+-- และ is_private ต้องเป็น TRUE เสมอ (เจ้าของ/แอดมินเท่านั้นที่ปลดล็อกเป็น public ได้)
 CREATE POLICY "svgbox_assets: authenticated insert"
   ON svgbox_assets FOR INSERT
   WITH CHECK (
     auth.uid() IS NOT NULL
     AND auth.uid() = user_id
+    AND (
+      svgbox_is_admin()                                     -- admin ใส่ status ใดก็ได้
+      OR (status = 'pending' AND is_private = TRUE)          -- user ทั่วไป: pending + private
+    )
   );
 
 -- เจ้าของ หรือ admin แก้ไข SVG ได้
+-- แต่การเปลี่ยน status และ is_private จำกัดสิทธิ์เพิ่มเติมผ่าน trigger/function
 CREATE POLICY "svgbox_assets: owner or admin update"
   ON svgbox_assets FOR UPDATE
   USING    (auth.uid() = user_id OR svgbox_is_admin())
@@ -521,6 +639,40 @@ CREATE POLICY "svgbox_assets: owner or admin update"
 CREATE POLICY "svgbox_assets: owner or admin delete"
   ON svgbox_assets FOR DELETE
   USING (auth.uid() = user_id OR svgbox_is_admin());
+
+
+-- ── Guard: only admin can change status / is_private ──────────────────
+-- ป้องกันไม่ให้ user ทั่วไปแอบอัปเดต status เป็น 'approved' หรือสับสน is_private
+-- trigger นี้จะเช็คว่า:
+--   - ถ้าเป็น admin สามารถแก้ทุก field ได้
+--   - ถ้าเป็น user ทั่วไป ห้ามเปลี่ยน status และ is_private
+CREATE OR REPLACE FUNCTION svgbox_guard_approval_fields()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NOT svgbox_is_admin() THEN
+    -- user ทั่วไป ไม่สามารถเปลี่ยน status หรือ is_private
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+      RAISE EXCEPTION 'Only admin can change approval status';
+    END IF;
+    IF NEW.is_private IS DISTINCT FROM OLD.is_private THEN
+      RAISE EXCEPTION 'Only admin can change visibility (private/public)';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION svgbox_guard_approval_fields IS
+  'Trigger — ป้องกันไม่ให้ user ทั่วไปเปลี่ยน status/is_private (admin เท่านั้น)';
+
+DROP TRIGGER IF EXISTS svgbox_assets_guard_approval ON svgbox_assets;
+
+CREATE TRIGGER svgbox_assets_guard_approval
+  BEFORE UPDATE ON svgbox_assets
+  FOR EACH ROW EXECUTE PROCEDURE svgbox_guard_approval_fields();
 
 
 -- ── svgbox_favorites ──────────────────────────────────────────

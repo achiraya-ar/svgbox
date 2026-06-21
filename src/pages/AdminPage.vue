@@ -64,13 +64,12 @@
                             <ShieldCheck :size="18" class="text-purple-500" />
                         </div>
                         <div>
-                            <p
-                                <p class="text-2xl font-semibold text-textprimary font-prompt">
-                                    {{ adminCount }}
-                                </p>
-                                <p class="text-xs text-purple-600 font-prompt">
-                                    {{ t('admin.stats.admins') }}
-                                </p>
+                            <p class="text-2xl font-semibold text-textprimary font-prompt">
+                                {{ adminCount }}
+                            </p>
+                            <p class="text-xs text-purple-600 font-prompt">
+                                {{ t('admin.stats.admins') }}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -468,6 +467,31 @@
             <!--  TAB: ALL SVGs                            -->
             <!-- ══════════════════════════════════════════ -->
             <div v-if="activeTab === 'svgs'">
+                <!-- Status filter pills -->
+                <div
+                    class="flex flex-wrap items-center gap-2 mb-4 bg-soft p-1 rounded-xl w-fit border border-border"
+                >
+                    <button
+                        v-for="opt in statusFilterOptions"
+                        :key="opt.key"
+                        @click="svgStatusFilter = opt.key"
+                        :class="[
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-prompt font-medium transition-all duration-200',
+                            svgStatusFilter === opt.key
+                                ? 'bg-surface text-accent shadow-sm border border-border'
+                                : 'text-textsecondary hover:text-primary',
+                        ]"
+                    >
+                        {{ opt.label }}
+                        <span
+                            v-if="opt.key === 'pending' && pendingCount > 0"
+                            class="text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full"
+                        >
+                            {{ pendingCount }}
+                        </span>
+                    </button>
+                </div>
+
                 <!-- Toolbar -->
                 <div class="flex flex-col sm:flex-row gap-3 mb-5">
                     <div class="relative flex-1">
@@ -478,7 +502,7 @@
                         <input
                             v-model="svgSearch"
                             type="text"
-                            :placeholder="t('admin.svgs.searchPlaceholder')"
+                            placeholder="Search SVGs..."
                             class="w-full pl-9 pr-4 py-2.5 bg-surface border border-border rounded-xl text-sm font-prompt text-textprimary placeholder-textsecondary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200"
                         />
                     </div>
@@ -487,7 +511,7 @@
                             v-model="svgCategory"
                             class="pl-4 pr-8 py-2.5 bg-surface border border-border rounded-xl text-sm font-prompt text-textprimary focus:outline-none focus:border-accent appearance-none transition-all duration-200 min-w-[150px]"
                         >
-                            <option value="">{{ t('admin.svgs.categoryAll') }}</option>
+                            <option value="">All Categories</option>
                             <option
                                 v-for="cat in categories"
                                 :key="cat"
@@ -510,7 +534,7 @@
                             :size="15"
                             :class="svgsLoading ? 'animate-spin' : ''"
                         />
-                        {{ t('admin.svgs.refresh') }}
+                        Refresh
                     </button>
                 </div>
 
@@ -532,7 +556,7 @@
 
                 <!-- SVG Grid -->
                 <div
-                    v-else-if="filteredSvgs.length"
+                    v-if="filteredSvgs.length"
                     class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5"
                 >
                     <div
@@ -553,24 +577,60 @@
                                 v-else
                                 class="text-textsecondary text-xs font-prompt"
                             >
-                                {{ t('admin.svgs.noPreview') }}
+                                No preview
                             </div>
 
                             <!-- Overlay actions -->
                             <div
-                                class="absolute inset-0 bg-primary/60 rounded-xl flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                class="absolute inset-0 bg-primary/60 rounded-xl flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-wrap px-2"
                                 @click.stop
                             >
                                 <RouterLink
                                     :to="`/svg/${svg.id}`"
-                                    :title="t('admin.svgs.viewEdit')"
+                                    title="View"
                                     class="p-2 rounded-xl bg-white/20 text-white hover:bg-accent transition-all duration-150 hover:scale-110"
                                 >
                                     <ExternalLink :size="15" />
                                 </RouterLink>
+
+                                <!-- Approve (only when not already approved) -->
+                                <button
+                                    v-if="svg.status !== 'approved'"
+                                    @click="openReview(svg, 'approve', true)"
+                                    title="Approve"
+                                    class="p-2 rounded-xl bg-white/20 text-white hover:bg-green-500 transition-all duration-150 hover:scale-110"
+                                >
+                                    <Check :size="15" />
+                                </button>
+
+                                <!-- Reject (only when not already rejected) -->
+                                <button
+                                    v-if="svg.status !== 'rejected'"
+                                    @click="openReview(svg, 'reject', false)"
+                                    title="Reject"
+                                    class="p-2 rounded-xl bg-white/20 text-white hover:bg-orange-500 transition-all duration-150 hover:scale-110"
+                                >
+                                    <XCircle :size="15" />
+                                </button>
+
+                                <!-- Toggle visibility (public/private) -->
+                                <button
+                                    v-if="svg.status === 'approved'"
+                                    @click="toggleVisibility(svg)"
+                                    :title="svg.is_private ? 'Make Public' : 'Make Private'"
+                                    class="p-2 rounded-xl bg-white/20 text-white hover:bg-purple-500 transition-all duration-150 hover:scale-110"
+                                >
+                                    <Unlock
+                                        v-if="!svg.is_private"
+                                        :size="15"
+                                        class="-scale-x-100"
+                                    />
+                                    <Lock v-else :size="15" />
+                                </button>
+
                                 <button
                                     @click="confirmDeleteSvg = svg"
-                                    :title="t('admin.svgs.deleteSvg')"
+                                    title="Delete"
                                     class="p-2 rounded-xl bg-white/20 text-white hover:bg-red-500 transition-all duration-150 hover:scale-110"
                                 >
                                     <Trash2 :size="15" />
@@ -590,7 +650,7 @@
                             <User
                                 :size="11"
                                 class="text-textsecondary shrink-0"
-                                :title="t('admin.svgs.owner')"
+                                title="Owner"
                             />
                             <span
                                 class="text-xs text-textsecondary font-prompt truncate"
@@ -603,12 +663,38 @@
                         </div>
 
                         <!-- Category -->
-                        <span
-                            v-if="svg.category"
-                            class="text-[11px] font-prompt text-accent bg-accent/10 px-2 py-0.5 rounded-full"
-                        >
-                            {{ svg.category }}
-                        </span>
+                        <div v-if="svg.category" class="mt-2">
+                            <span
+                                class="text-[11px] font-prompt text-accent bg-accent/10 px-2 py-0.5 rounded-full"
+                            >
+                                {{ svg.category }}
+                            </span>
+                        </div>
+
+                        <!-- Approval status badge -->
+                        <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                            <span
+                                v-if="svg.status === 'pending'"
+                                class="inline-flex items-center gap-1 text-[10px] font-prompt font-medium text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full"
+                            >
+                                <Clock :size="10" />
+                                Pending
+                            </span>
+                            <span
+                                v-else-if="svg.status === 'rejected'"
+                                class="inline-flex items-center gap-1 text-[10px] font-prompt font-medium text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full"
+                            >
+                                <X :size="10" />
+                                Rejected
+                            </span>
+                            <span
+                                v-if="svg.is_private"
+                                class="inline-flex items-center gap-1 text-[10px] font-prompt font-medium text-secondary bg-soft border border-border px-1.5 py-0.5 rounded-full"
+                            >
+                                <Lock :size="10" />
+                                Private
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -761,7 +847,7 @@
                         </div>
 
                         <div
-                            class="bg-soft rounded-xl p-3 mb-5 text-sm font-prompt text-textprimary"
+                            class="bg-soft rounded-xl p-3 mb-5 text-sm font-prompt text-textprimary flex items-center gap-2 flex-wrap"
                         >
                             <span
                                 :class="
@@ -776,7 +862,7 @@
                                         : t('admin.changeRoleModal.roleUser')
                                 }}
                             </span>
-                            →
+                            <ArrowRight :size="14" class="text-textsecondary" />
                             <span
                                 :class="
                                     newRoleTarget === 'admin'
@@ -885,6 +971,136 @@
             </Transition>
         </Teleport>
 
+        <!-- ══════════════════════════════════════════════ -->
+        <!--  MODAL: Review SVG (Approve/Reject + public) -->
+        <!-- ══════════════════════════════════════════════ -->
+        <Teleport to="body">
+            <Transition name="modal">
+                <div
+                    v-if="reviewTarget"
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+                    @click.self="reviewTarget = null"
+                >
+                    <div
+                        class="bg-surface rounded-2xl shadow-xl w-full max-w-md p-6 font-prompt"
+                    >
+                        <div class="flex items-center gap-3 mb-4">
+                            <div
+                                :class="[
+                                    'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                                    reviewAction === 'approve'
+                                        ? 'bg-green-100'
+                                        : 'bg-orange-100',
+                                ]"
+                            >
+                                <Check
+                                    v-if="reviewAction === 'approve'"
+                                    :size="18"
+                                    class="text-green-600"
+                                />
+                                <XCircle
+                                    v-else
+                                    :size="18"
+                                    class="text-orange-500"
+                                />
+                            </div>
+                            <div>
+                                <h3
+                                    class="text-base font-semibold text-textprimary font-prompt"
+                                >
+                                    {{
+                                        reviewAction === "approve"
+                                            ? "Approve SVG"
+                                            : "Reject SVG"
+                                    }}
+                                </h3>
+                                <p
+                                    class="text-xs text-textsecondary font-prompt mt-0.5"
+                                >
+                                    "{{ reviewTarget.name }}"
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Visibility toggle (only when approving) -->
+                        <label
+                            v-if="reviewAction === 'approve'"
+                            class="flex items-start gap-3 bg-soft rounded-xl p-3 mb-5 cursor-pointer"
+                        >
+                            <input
+                                v-model="reviewTogglePublic"
+                                type="checkbox"
+                                class="mt-0.5 w-4 h-4 accent-accent"
+                            />
+                            <div>
+                                <p
+                                    class="text-sm font-medium text-textprimary font-prompt"
+                                >
+                                    Make this SVG public
+                                </p>
+                                <p
+                                    class="text-xs text-textsecondary font-prompt mt-0.5"
+                                >
+                                    If unchecked, the SVG stays private and is
+                                    only visible to the owner.
+                                </p>
+                            </div>
+                        </label>
+
+                        <div
+                            v-else
+                            class="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-5"
+                        >
+                            <p
+                                class="text-xs font-prompt text-orange-700"
+                            >
+                                The owner will see that their SVG was rejected.
+                                You can approve it later.
+                            </p>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button
+                                @click="reviewTarget = null"
+                                :disabled="isReviewing"
+                                class="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-prompt font-medium text-secondary hover:bg-soft transition-all duration-200 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                @click="handleReview"
+                                :disabled="isReviewing"
+                                :class="[
+                                    'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-prompt font-medium transition-all duration-200 disabled:opacity-60',
+                                    reviewAction === 'approve'
+                                        ? 'bg-green-500 hover:bg-green-600'
+                                        : 'bg-orange-500 hover:bg-orange-600',
+                                ]"
+                            >
+                                <Loader2
+                                    v-if="isReviewing"
+                                    :size="15"
+                                    class="animate-spin"
+                                />
+                                <Check
+                                    v-else-if="reviewAction === 'approve'"
+                                    :size="15"
+                                />
+                                <XCircle v-else :size="15" />
+                                {{
+                                    isReviewing
+                                        ? "Processing..."
+                                        : reviewAction === "approve"
+                                          ? "Approve"
+                                          : "Reject"
+                                }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
         <!-- Toast -->
         <ToastNotification
             v-if="toast.message"
@@ -915,6 +1131,12 @@ import {
     ChevronDown,
     ExternalLink,
     Info,
+    Check,
+    XCircle,
+    Lock,
+    Unlock,
+    X,
+    ArrowRight,
 } from "lucide-vue-next";
 import DefaultLayout from "../layouts/DefaultLayout.vue";
 import ToastNotification from "../components/ToastNotification.vue";
@@ -948,6 +1170,8 @@ const {
     loading: svgsLoading,
     fetchAll,
     remove: removeSvg,
+    adminReview,
+    update: updateSvg,
 } = useSvgAssets();
 
 // ── State ────────────────────────────────────────────────────
@@ -967,6 +1191,16 @@ watch(activeTab, (tab) => {
 });
 const categories = ["Illustration", "Icon", "Logo", "Animation", "Other"];
 
+const statusFilterOptions: {
+    key: "all" | "pending" | "approved" | "rejected";
+    label: string;
+}[] = [
+    { key: "all", label: "All" },
+    { key: "pending", label: "Pending" },
+    { key: "approved", label: "Approved" },
+    { key: "rejected", label: "Rejected" },
+];
+
 // Users tab
 const users = ref<AdminUser[]>([]);
 const usersLoading = ref(false);
@@ -977,6 +1211,7 @@ const showInactiveOnly = ref(false);
 // SVGs tab
 const svgSearch = ref("");
 const svgCategory = ref("");
+const svgStatusFilter = ref<"all" | "pending" | "approved" | "rejected">("all");
 
 // Modals
 const confirmDeleteUser = ref<AdminUser | null>(null);
@@ -984,10 +1219,16 @@ const confirmRoleChange = ref<AdminUser | null>(null);
 const newRoleTarget = ref<"user" | "admin">("user");
 const confirmDeleteSvg = ref<SvgAsset | null>(null);
 
+// Pending review modal — when admin clicks Approve/Reject on a card
+const reviewTarget = ref<SvgAsset | null>(null);
+const reviewAction = ref<"approve" | "reject">("approve");
+const reviewTogglePublic = ref(false);
+
 // Loading states
 const isDeleting = ref(false);
 const isChangingRole = ref(false);
 const isDeletingSvg = ref(false);
+const isReviewing = ref(false);
 
 // Toast
 const toast = ref<{ message: string; type: "success" | "error" | "info" }>({
@@ -1050,8 +1291,31 @@ const filteredSvgs = computed(() => {
         list = list.filter((s) => s.category === svgCategory.value);
     }
 
+    if (svgStatusFilter.value !== "all") {
+        list = list.filter((s) => s.status === svgStatusFilter.value);
+    }
+
+    // เรียงตามสถานะ: pending ก่อน แล้วตามด้วย created_at
+    list.sort((a, b) => {
+        const order: Record<string, number> = {
+            pending: 0,
+            rejected: 1,
+            approved: 2,
+        };
+        const oa = order[a.status] ?? 3;
+        const ob = order[b.status] ?? 3;
+        if (oa !== ob) return oa - ob;
+        return (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+    });
+
     return list;
 });
+
+const pendingCount = computed(
+    () => allSvgs.value.filter((s) => s.status === "pending").length,
+);
 
 // Map from userId → display label (for SVG owner column)
 const ownerMap = computed(() => {
@@ -1174,7 +1438,7 @@ const handleDeleteUser = async () => {
         });
         if (error) throw error;
         showToast(
-            `${t('admin.deleteUserModal.confirm')} ${confirmDeleteUser.value.display_name || confirmDeleteUser.value.email} ✓`,
+            `User ${confirmDeleteUser.value.display_name || confirmDeleteUser.value.email} deleted`,
             "success",
         );
         confirmDeleteUser.value = null;
@@ -1182,7 +1446,7 @@ const handleDeleteUser = async () => {
         await loadSvgs(); // refresh svg count
     } catch (e: unknown) {
         showToast(
-            e instanceof Error ? e.message : t('admin.toast.error'),
+            e instanceof Error ? e.message : "An error occurred",
             "error",
         );
     } finally {
@@ -1204,11 +1468,11 @@ const handleChangeRole = async () => {
         const u = users.value.find((u) => u.id === confirmRoleChange.value!.id);
         if (u) u.role = newRoleTarget.value;
 
-        showToast(t('admin.toast.roleChanged'), "success");
+        showToast("Role updated", "success");
         confirmRoleChange.value = null;
     } catch (e: unknown) {
         showToast(
-            e instanceof Error ? e.message : t('admin.toast.error'),
+            e instanceof Error ? e.message : "An error occurred",
             "error",
         );
     } finally {
@@ -1222,18 +1486,79 @@ const handleDeleteSvg = async () => {
     isDeletingSvg.value = true;
     try {
         await removeSvg(confirmDeleteSvg.value.id);
-        showToast(t('admin.toast.svgDeleted'), "success");
+        showToast("SVG deleted", "success");
         confirmDeleteSvg.value = null;
         await loadSvgs();
     } catch (e: unknown) {
         showToast(
-            e instanceof Error ? e.message : t('admin.toast.error'),
+            e instanceof Error ? e.message : "An error occurred",
             "error",
         );
     } finally {
         isDeletingSvg.value = false;
     }
 };
+
+/** Open the review modal so admin can choose approve/reject + public toggle. */
+const openReview = (
+    svg: SvgAsset,
+    action: "approve" | "reject",
+    makePublic: boolean,
+) => {
+    reviewTarget.value = svg;
+    reviewAction.value = action;
+    // If approving and the SVG is currently private, default to "make public".
+    // If rejecting, keep the current visibility (don't change it).
+    reviewTogglePublic.value =
+        action === "approve" && svg.is_private ? makePublic : !svg.is_private;
+};
+
+/** Confirm review from the modal — apply status + visibility atomically. */
+const handleReview = async () => {
+    if (!reviewTarget.value) return;
+    isReviewing.value = true;
+    try {
+        await adminReview(
+            reviewTarget.value.id,
+            reviewAction.value === "approve" ? "approved" : "rejected",
+            !reviewTogglePublic.value, // checkbox means "make public"
+        );
+        showToast(
+            reviewAction.value === "approve" ? "SVG approved" : "SVG rejected",
+            "success",
+        );
+        reviewTarget.value = null;
+        await loadSvgs();
+    } catch (e: unknown) {
+        showToast(
+            e instanceof Error ? e.message : "An error occurred",
+            "error",
+        );
+    } finally {
+        isReviewing.value = false;
+    }
+};
+
+/** Toggle a single SVG's visibility (public ↔ private) without changing status. */
+const toggleVisibility = async (svg: SvgAsset) => {
+    try {
+        // Use adminReview to keep the guard trigger happy; status stays the same.
+        await adminReview(svg.id, svg.status, !svg.is_private);
+        showToast(
+            !svg.is_private ? "Set to Private" : "Set to Public",
+            "success",
+        );
+        await loadSvgs();
+    } catch (e: unknown) {
+        showToast(
+            e instanceof Error ? e.message : "An error occurred",
+            "error",
+        );
+    }
+};
+
+// Suppress unused warning — kept for future use
+void updateSvg;
 
 // ── Lifecycle ─────────────────────────────────────────────────
 // Re-fetch when the user switches back to this tab.

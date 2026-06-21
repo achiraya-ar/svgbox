@@ -3,293 +3,332 @@
         <Transition name="modal">
             <div
                 v-if="modelValue"
-                class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm overflow-y-auto py-8 px-4"
+                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
                 @click.self="handleClose"
             >
                 <div
-                    class="bg-surface rounded-2xl shadow-xl w-full max-w-lg font-prompt"
+                    class="bg-surface rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-border font-prompt"
                 >
                     <!-- Header -->
                     <div
-                        class="flex items-center justify-between p-6 border-b border-border"
+                        class="flex items-center justify-between px-5 py-4 border-b border-border shrink-0"
                     >
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2">
                             <div
-                                class="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center"
+                                class="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center"
                             >
-                                <Upload :size="18" class="text-accent" />
+                                <Upload :size="16" class="text-accent" />
                             </div>
                             <h2
-                                class="text-lg font-semibold text-textprimary font-prompt"
+                                class="text-base font-semibold text-textprimary font-prompt"
                             >
-                                {{ t("uploadModal.title") }}
+                                Upload SVG
                             </h2>
                         </div>
                         <button
                             @click="handleClose"
-                            class="p-2 rounded-xl text-textsecondary hover:text-primary hover:bg-soft transition-all duration-200"
+                            class="p-1.5 rounded-lg text-textsecondary hover:text-textprimary hover:bg-soft transition-all duration-150"
                         >
                             <X :size="18" />
                         </button>
                     </div>
 
-                    <!-- Form -->
-                    <form @submit.prevent="handleSubmit" class="p-6 space-y-5">
-                        <!-- Name -->
-                        <div>
+                    <!-- Body: 2 columns — preview LEFT, source + form fields RIGHT -->
+                    <form
+                        @submit.prevent="handleSubmit"
+                        class="flex-1 overflow-hidden grid md:grid-cols-2 min-h-0"
+                    >
+                        <!-- LEFT: preview -->
+                        <div
+                            class="p-5 overflow-y-auto border-r border-border h-full flex flex-col"
+                        >
                             <label
-                                class="block text-sm font-medium text-textprimary mb-1.5 font-prompt"
+                                class="block text-sm font-medium text-textprimary font-prompt mb-1.5 shrink-0"
                             >
-                                {{ t("uploadModal.nameLabel") }}
-                                <span class="text-red-500">*</span>
+                                Preview
                             </label>
-                            <input
-                                v-model="form.name"
-                                type="text"
-                                :placeholder="t('uploadModal.namePlaceholder')"
-                                class="w-full px-4 py-2.5 bg-bg border rounded-xl text-sm font-prompt text-textprimary placeholder-textsecondary focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200"
-                                :class="
-                                    errors.name
-                                        ? 'border-red-400'
-                                        : 'border-border focus:border-accent'
-                                "
-                            />
-                            <p
-                                v-if="errors.name"
-                                class="mt-1 text-xs text-red-500 font-prompt"
+                            <div
+                                class="flex-1 w-full border border-border rounded-xl overflow-hidden flex items-center justify-center p-6 bg-bg"
+                                style="min-height: 280px"
                             >
-                                {{ errors.name }}
-                            </p>
+                                <div
+                                    v-if="previewHtml"
+                                    class="w-full h-full flex items-center justify-center"
+                                    v-html="previewHtml"
+                                />
+                                <p
+                                    v-else
+                                    class="text-sm text-textsecondary font-prompt"
+                                >
+                                    Preview will appear here
+                                </p>
+                            </div>
                         </div>
 
-                        <!-- SVG Code / File Drop -->
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-textprimary mb-1.5 font-prompt"
-                            >
-                                {{ t("uploadModal.svgCodeLabel") }}
-                                <span class="text-red-500">*</span>
-                            </label>
-
-                            <!-- Drop Zone -->
-                            <div
-                                class="relative border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer"
-                                :class="[
-                                    isDragging
-                                        ? 'border-accent bg-accent/5 scale-[1.01]'
-                                        : errors.svg_code
-                                          ? 'border-red-400 bg-bg'
-                                          : 'border-border bg-bg hover:border-accent/60 hover:bg-accent/5',
-                                ]"
-                                @dragover.prevent="isDragging = true"
-                                @dragleave.prevent="isDragging = false"
-                                @drop.prevent="handleDrop"
-                                @click="triggerFileInput"
-                            >
-                                <input
-                                    ref="fileInput"
-                                    type="file"
-                                    accept=".svg"
-                                    class="hidden"
-                                    @change="handleFileChange"
-                                />
-
+                        <!-- RIGHT: source selector + form fields -->
+                        <div class="p-5 space-y-4 overflow-y-auto">
+                            <!-- Source selector: Upload File / Paste Code -->
+                            <div>
                                 <div
-                                    v-if="!form.svg_code"
-                                    class="flex flex-col items-center justify-center py-8 px-4 text-center pointer-events-none"
+                                    class="flex items-center gap-1 bg-soft p-1 rounded-xl w-fit border border-border mb-2"
                                 >
-                                    <div
-                                        class="w-12 h-12 rounded-xl bg-soft flex items-center justify-center mb-3"
+                                    <button
+                                        type="button"
+                                        @click="inputMode = 'paste'"
+                                        :class="[
+                                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-prompt font-medium transition-all duration-200',
+                                            inputMode === 'paste'
+                                                ? 'bg-surface text-accent shadow-sm border border-border'
+                                                : 'text-textsecondary hover:text-primary',
+                                        ]"
                                     >
-                                        <FileUp
-                                            :size="22"
-                                            class="text-textsecondary"
-                                        />
-                                    </div>
-                                    <p
-                                        class="text-sm font-medium text-textprimary font-prompt"
+                                        <Code :size="13" />
+                                        Paste Code
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="inputMode = 'file'"
+                                        :class="[
+                                            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-prompt font-medium transition-all duration-200',
+                                            inputMode === 'file'
+                                                ? 'bg-surface text-accent shadow-sm border border-border'
+                                                : 'text-textsecondary hover:text-primary',
+                                        ]"
                                     >
-                                        {{
-                                            t("uploadModal.svgCodePlaceholder")
-                                        }}
-                                    </p>
-                                    <p
-                                        class="text-xs text-textsecondary mt-1 font-prompt"
-                                    >
-                                        {{ t("uploadModal.namePlaceholder") }}
-                                    </p>
+                                        <FileUp :size="13" />
+                                        Upload File
+                                    </button>
                                 </div>
 
-                                <div v-else class="p-3 pointer-events-none">
-                                    <div class="flex items-center gap-2 mb-2">
-                                        <FileCheck
-                                            :size="16"
-                                            class="text-accent shrink-0"
+                                <!-- File upload zone -->
+                                <div v-if="inputMode === 'file'">
+                                    <div
+                                        class="relative border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer"
+                                        :class="[
+                                            isDragging
+                                                ? 'border-accent bg-accent/5 scale-[1.01]'
+                                                : errors.svg_code
+                                                  ? 'border-red-400 bg-bg'
+                                                  : form.svg_code
+                                                    ? 'border-accent/40 bg-accent/5'
+                                                    : 'border-border bg-bg hover:border-accent/60 hover:bg-accent/5',
+                                        ]"
+                                        @dragover.prevent="isDragging = true"
+                                        @dragleave.prevent="isDragging = false"
+                                        @drop.prevent="handleDrop"
+                                        @click="triggerFileInput"
+                                    >
+                                        <input
+                                            ref="fileInput"
+                                            type="file"
+                                            accept=".svg,image/svg+xml"
+                                            class="hidden"
+                                            @change="handleFileChange"
                                         />
-                                        <span
-                                            class="text-xs text-accent font-prompt font-medium truncate"
-                                            >{{
-                                                t("uploadModal.upload")
-                                            }}
-                                            ✓</span
+
+                                        <div
+                                            v-if="!form.svg_code"
+                                            class="flex flex-col items-center justify-center py-6 px-4 text-center pointer-events-none"
                                         >
+                                            <div
+                                                class="w-10 h-10 rounded-xl bg-soft flex items-center justify-center mb-2"
+                                            >
+                                                <FileUp
+                                                    :size="20"
+                                                    class="text-textsecondary"
+                                                />
+                                            </div>
+                                            <p
+                                                class="text-sm font-medium text-textprimary font-prompt"
+                                            >
+                                                Drop SVG file here
+                                            </p>
+                                            <p
+                                                class="text-xs text-textsecondary mt-0.5 font-prompt"
+                                            >
+                                                or click to browse
+                                            </p>
+                                        </div>
+
+                                        <div
+                                            v-else
+                                            class="flex items-center gap-2 px-4 py-3"
+                                        >
+                                            <FileCheck
+                                                :size="18"
+                                                class="text-accent shrink-0"
+                                            />
+                                            <span
+                                                class="text-sm text-accent font-prompt font-medium truncate flex items-center gap-1"
+                                            >
+                                                <Check :size="12" />
+                                                Ready
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
+
+                                <!-- Paste code textarea -->
+                                <div v-else class="relative">
+                                    <textarea
+                                        v-model="form.svg_code"
+                                        placeholder='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">...</svg>'
+                                        class="w-full px-4 py-3 bg-bg border rounded-xl text-xs font-mono text-textprimary placeholder-textsecondary focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200"
+                                        :class="
+                                            errors.svg_code
+                                                ? 'border-red-400'
+                                                : 'border-border focus:border-accent'
+                                        "
+                                        style="min-height: 120px"
+                                        rows="5"
+                                        @input="onPasteInput"
+                                    />
+                                </div>
+
+                                <p
+                                    v-if="errors.svg_code"
+                                    class="mt-1 text-xs text-red-500 font-prompt"
+                                >
+                                    {{ errors.svg_code }}
+                                </p>
                             </div>
 
-                            <!-- Textarea for pasting -->
-                            <div class="mt-2">
+                            <!-- Name -->
+                            <div>
                                 <label
-                                    class="block text-xs text-textsecondary mb-1 font-prompt"
-                                    >{{ t("uploadModal.svgCodeLabel") }}:</label
+                                    class="block text-sm font-medium text-textprimary font-prompt mb-1.5"
                                 >
-                                <textarea
-                                    v-model="form.svg_code"
-                                    rows="4"
-                                    placeholder='<svg xmlns="http://www.w3.org/2000/svg" ...>...</svg>'
-                                    class="w-full px-3 py-2.5 bg-bg border rounded-xl text-xs font-mono text-textprimary placeholder-textsecondary focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none transition-all duration-200"
+                                    Name
+                                    <span class="text-red-500">*</span>
+                                </label>
+                                <input
+                                    v-model="form.name"
+                                    type="text"
+                                    placeholder="My SVG name..."
+                                    class="w-full px-4 py-2.5 bg-bg border rounded-xl text-sm font-prompt text-textprimary placeholder-textsecondary focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all duration-200"
                                     :class="
-                                        errors.svg_code
+                                        errors.name
                                             ? 'border-red-400'
                                             : 'border-border focus:border-accent'
                                     "
-                                    @click.stop
                                 />
-                            </div>
-                            <p
-                                v-if="errors.svg_code"
-                                class="mt-1 text-xs text-red-500 font-prompt"
-                            >
-                                {{ errors.svg_code }}
-                            </p>
-                        </div>
-
-                        <!-- Live SVG Preview -->
-                        <Transition name="preview">
-                            <div
-                                v-if="form.svg_code && previewHtml"
-                                class="rounded-xl border border-border bg-bg p-4"
-                            >
                                 <p
-                                    class="text-xs font-medium text-textsecondary mb-2 font-prompt flex items-center gap-1.5"
+                                    v-if="errors.name"
+                                    class="mt-1 text-xs text-red-500 font-prompt"
                                 >
-                                    <Eye :size="13" />
-                                    {{ t("uploadModal.previewLabel") }}
+                                    {{ errors.name }}
                                 </p>
+                            </div>
+
+                            <!-- Tags -->
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-textprimary font-prompt mb-1.5"
+                                >
+                                    Tags
+                                </label>
+                                <input
+                                    v-model="tagsInput"
+                                    type="text"
+                                    placeholder="Add tag..."
+                                    class="w-full px-4 py-2.5 bg-bg border border-border rounded-xl text-sm font-prompt text-textprimary placeholder-textsecondary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200"
+                                    @input="parseTags"
+                                />
                                 <div
-                                    class="flex items-center justify-center h-32 bg-surface rounded-lg overflow-hidden"
-                                    v-html="previewHtml"
-                                />
+                                    v-if="form.tags.length"
+                                    class="flex flex-wrap gap-1.5 mt-2"
+                                >
+                                    <span
+                                        v-for="tag in form.tags"
+                                        :key="tag"
+                                        class="flex items-center gap-1 bg-soft text-textsecondary rounded-full px-2.5 py-0.5 text-xs font-prompt"
+                                    >
+                                        {{ tag }}
+                                        <button
+                                            type="button"
+                                            @click="removeTag(tag)"
+                                            class="hover:text-primary transition-colors"
+                                        >
+                                            <X :size="10" />
+                                        </button>
+                                    </span>
+                                </div>
                             </div>
-                        </Transition>
 
-                        <!-- Tags -->
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-textprimary mb-1.5 font-prompt"
-                            >
-                                {{ t("uploadModal.tagsLabel") }}
-                            </label>
-                            <input
-                                v-model="tagsInput"
-                                type="text"
-                                :placeholder="t('uploadModal.tagsPlaceholder')"
-                                class="w-full px-4 py-2.5 bg-bg border border-border rounded-xl text-sm font-prompt text-textprimary placeholder-textsecondary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200"
-                                @input="parseTags"
-                            />
-                            <!-- Tag chips -->
+                            <!-- Category -->
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-textprimary font-prompt mb-1.5"
+                                >
+                                    Category
+                                </label>
+                                <div class="relative">
+                                    <select
+                                        v-model="form.category"
+                                        class="w-full px-4 py-2.5 bg-bg border border-border rounded-xl text-sm font-prompt text-textprimary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 appearance-none transition-all duration-200 pr-10"
+                                    >
+                                        <option value="">Select category</option>
+                                        <option
+                                            v-for="cat in categories"
+                                            :key="cat"
+                                            :value="cat"
+                                        >
+                                            {{ cat }}
+                                        </option>
+                                    </select>
+                                    <ChevronDown
+                                        :size="16"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-textsecondary pointer-events-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Error -->
                             <div
-                                v-if="form.tags.length"
-                                class="flex flex-wrap gap-1.5 mt-2"
+                                v-if="submitError"
+                                class="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3"
                             >
-                                <span
-                                    v-for="tag in form.tags"
-                                    :key="tag"
-                                    class="flex items-center gap-1 bg-soft text-textsecondary rounded-full px-2.5 py-0.5 text-xs font-prompt"
-                                >
-                                    {{ tag }}
-                                    <button
-                                        type="button"
-                                        @click="removeTag(tag)"
-                                        class="hover:text-primary transition-colors"
-                                    >
-                                        <X :size="10" />
-                                    </button>
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Category -->
-                        <div>
-                            <label
-                                class="block text-sm font-medium text-textprimary mb-1.5 font-prompt"
-                                >{{ t("uploadModal.categoryLabel") }}</label
-                            >
-                            <div class="relative">
-                                <select
-                                    v-model="form.category"
-                                    class="w-full px-4 py-2.5 bg-bg border border-border rounded-xl text-sm font-prompt text-textprimary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 appearance-none transition-all duration-200 pr-10"
-                                >
-                                    <option value="">
-                                        {{ t("uploadModal.categoryDefault") }}
-                                    </option>
-                                    <option
-                                        v-for="cat in categories"
-                                        :key="cat"
-                                        :value="cat"
-                                    >
-                                        {{ cat }}
-                                    </option>
-                                </select>
-                                <ChevronDown
+                                <AlertCircle
                                     :size="16"
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-textsecondary pointer-events-none"
+                                    class="text-red-500 shrink-0 mt-0.5"
                                 />
+                                <p class="text-sm text-red-600 font-prompt">
+                                    {{ submitError }}
+                                </p>
                             </div>
-                        </div>
-
-                        <!-- Error -->
-                        <div
-                            v-if="submitError"
-                            class="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3"
-                        >
-                            <AlertCircle
-                                :size="16"
-                                class="text-red-500 shrink-0 mt-0.5"
-                            />
-                            <p class="text-sm text-red-600 font-prompt">
-                                {{ submitError }}
-                            </p>
-                        </div>
-
-                        <!-- Actions -->
-                        <div class="flex items-center gap-3 pt-1">
-                            <button
-                                type="button"
-                                @click="handleClose"
-                                class="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-prompt font-medium text-secondary hover:bg-soft transition-all duration-200"
-                            >
-                                {{ t("uploadModal.cancel") }}
-                            </button>
-                            <button
-                                type="submit"
-                                :disabled="isSubmitting"
-                                class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-prompt font-medium hover:bg-accent/90 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                                <Loader2
-                                    v-if="isSubmitting"
-                                    :size="16"
-                                    class="animate-spin"
-                                />
-                                <Save v-else :size="16" />
-                                {{
-                                    isSubmitting
-                                        ? t("uploadModal.saving")
-                                        : t("uploadModal.save")
-                                }}
-                            </button>
                         </div>
                     </form>
+
+                    <!-- Footer -->
+                    <div
+                        class="flex items-center justify-end gap-3 px-5 py-4 border-t border-border shrink-0 bg-soft/30"
+                    >
+                        <button
+                            type="button"
+                            @click="handleClose"
+                            class="px-4 py-2 rounded-xl text-sm font-prompt text-textsecondary hover:text-textprimary hover:bg-soft transition-all duration-150"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="handleSubmit"
+                            :disabled="isSubmitting"
+                            class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-white text-sm font-prompt font-medium hover:bg-accent/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150"
+                        >
+                            <Loader2
+                                v-if="isSubmitting"
+                                :size="15"
+                                class="animate-spin"
+                            />
+                            <Save v-else :size="15" />
+                            {{
+                                isSubmitting
+                                    ? "Saving..."
+                                    : "Save"
+                            }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </Transition>
@@ -297,18 +336,18 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from "../composables/useI18n";
-import { ref, computed, watch } from "vue";
+import { ref, computed } from "vue";
 import {
     Upload,
     X,
     FileUp,
     FileCheck,
-    Eye,
     ChevronDown,
     AlertCircle,
     Loader2,
     Save,
+    Check,
+    Code,
 } from "lucide-vue-next";
 import { useSvgAssets } from "../composables/useSvgAssets";
 import { sanitizeSvg } from "../utils/svgUtils";
@@ -323,7 +362,6 @@ const emit = defineEmits<{
     uploaded: [];
 }>();
 
-const { t } = useI18n();
 const { create } = useSvgAssets();
 
 const categories = ["Illustration", "Icon", "Logo", "Animation", "Other"];
@@ -333,6 +371,12 @@ const isDragging = ref(false);
 const isSubmitting = ref(false);
 const submitError = ref<string | null>(null);
 const tagsInput = ref("");
+const inputMode = ref<"file" | "paste">("paste");
+
+const onPasteInput = () => {
+    errors.value.svg_code = "";
+    submitError.value = null;
+};
 
 const form = ref({
     name: "",
@@ -351,7 +395,7 @@ const previewHtml = computed(() => {
     const cleaned = sanitizeSvg(form.value.svg_code);
     return cleaned.replace(
         /<svg/i,
-        '<svg style="max-width:100%;max-height:120px;width:auto;height:auto;"',
+        '<svg style="max-width:100%;max-height:100%;width:auto;height:auto;"',
     );
 });
 
@@ -361,7 +405,7 @@ const triggerFileInput = () => {
 
 const readSvgFile = (file: File) => {
     if (!file.name.endsWith(".svg") && file.type !== "image/svg+xml") {
-        submitError.value = "กรุณาเลือกไฟล์ .svg เท่านั้น";
+        submitError.value = "Please select an .svg file";
         return;
     }
     const reader = new FileReader();
@@ -402,14 +446,14 @@ const validate = (): boolean => {
     errors.value = { name: "", svg_code: "" };
     let valid = true;
     if (!form.value.name.trim()) {
-        errors.value.name = "กรุณาระบุชื่อ SVG";
+        errors.value.name = "Please enter a name";
         valid = false;
     }
     if (!form.value.svg_code.trim()) {
-        errors.value.svg_code = "กรุณาใส่ SVG Code หรืออัปโหลดไฟล์";
+        errors.value.svg_code = "Please upload an SVG file";
         valid = false;
     } else if (!form.value.svg_code.includes("<svg")) {
-        errors.value.svg_code = "SVG Code ไม่ถูกต้อง ต้องมี <svg> tag";
+        errors.value.svg_code = "Invalid SVG — <svg> tag required";
         valid = false;
     }
     return valid;
@@ -428,26 +472,18 @@ const handleSubmit = async () => {
             tags: form.value.tags,
             category: form.value.category || "Other",
             is_favorite: false,
+            is_private: true,
+            status: "pending",
         });
         saved = true;
         emit("uploaded");
     } catch (e: unknown) {
         submitError.value =
-            e instanceof Error ? e.message : "เกิดข้อผิดพลาด กรุณาลองใหม่";
+            e instanceof Error ? e.message : "An error occurred, please try again";
     } finally {
         isSubmitting.value = false;
     }
-    // Close only after isSubmitting is false so handleClose guard doesn't block it
     if (saved) handleClose();
-};
-
-const resetForm = () => {
-    form.value = { name: "", svg_code: "", tags: [], category: "" };
-    errors.value = { name: "", svg_code: "" };
-    tagsInput.value = "";
-    submitError.value = null;
-    isDragging.value = false;
-    if (fileInput.value) fileInput.value.value = "";
 };
 
 const handleClose = () => {
@@ -456,13 +492,15 @@ const handleClose = () => {
     emit("update:modelValue", false);
 };
 
-// Reset when modal opens
-watch(
-    () => props.modelValue,
-    (val) => {
-        if (val) resetForm();
-    },
-);
+const resetForm = () => {
+    form.value = { name: "", svg_code: "", tags: [], category: "" };
+    errors.value = { name: "", svg_code: "" };
+    tagsInput.value = "";
+    submitError.value = null;
+    isDragging.value = false;
+    inputMode.value = "paste";
+    if (fileInput.value) fileInput.value.value = "";
+};
 </script>
 
 <style scoped>

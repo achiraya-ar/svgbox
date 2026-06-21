@@ -7,6 +7,8 @@ export interface SvgAsset {
   category: string;
   is_favorite: boolean;
   view_count: number;
+  is_private: boolean;
+  status: "pending" | "approved" | "rejected";
   created_at: string;
   updated_at: string;
   // Joined from svgbox_profiles (present when fetched with creator info)

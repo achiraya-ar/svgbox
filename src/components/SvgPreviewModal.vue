@@ -145,8 +145,11 @@
                         <div
                             class="flex items-center justify-between gap-3 px-5 py-4 border-t border-border shrink-0 bg-soft/30"
                         >
-                            <div class="text-xs text-textsecondary font-prompt">
-                                <span v-if="sanitizedSvg">SVG พร้อมดาวน์โหลด ✓</span>
+                            <div class="text-xs text-textsecondary font-prompt flex items-center gap-1">
+                                <template v-if="sanitizedSvg">
+                                    <Check :size="12" class="text-accent" />
+                                    <span>SVG พร้อมดาวน์โหลด</span>
+                                </template>
                                 <span v-else>วาง SVG code เพื่อดูตัวอย่าง</span>
                             </div>
                             <div class="flex gap-2">

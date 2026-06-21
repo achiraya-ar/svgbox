@@ -132,7 +132,6 @@ import { useRouter } from "vue-router";
 import { Heart, Download, Copy, Check, User2 } from "lucide-vue-next";
 import {
     sanitizeSvg,
-    downloadSvg,
     copySvgToClipboard,
 } from "../utils/svgUtils";
 import { useI18n } from "../composables/useI18n";
@@ -244,7 +243,8 @@ const handleFavorite = () => {
 };
 
 const handleDownload = () => {
-    downloadSvg(props.asset.svg_code, props.asset.name);
+    // Don't download directly — let the parent open the DownloadMenu so
+    // the user can pick format + size.
     emit("download", props.asset.id);
 };
 

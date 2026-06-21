@@ -349,6 +349,15 @@
             @uploaded="handleUploaded"
         />
 
+        <!-- Download menu (shared for all cards on this page) -->
+        <DownloadMenu
+            v-if="downloadAsset"
+            v-model="downloadMenuOpen"
+            :svg-code="downloadAsset.svg_code"
+            :filename="downloadAsset.name"
+            @downloaded="showToast('Downloaded', 'success')"
+        />
+
         <!-- Toast -->
         <ToastNotification
             v-if="toast.message"
@@ -377,6 +386,8 @@ import DefaultLayout from "../layouts/DefaultLayout.vue";
 import SVGCard from "../components/SVGCard.vue";
 import UploadModal from "../components/UploadModal.vue";
 import ToastNotification from "../components/ToastNotification.vue";
+import DownloadMenu from "../components/DownloadMenu.vue";
+import type { SvgAsset } from "../types";
 import { useAuth } from "../composables/useAuth";
 import { useSvgAssets } from "../composables/useSvgAssets";
 import { useScrollRestoration } from "../composables/useScrollRestoration";
@@ -396,6 +407,8 @@ const {
 const { restoreScroll } = useScrollRestoration("dashboard");
 
 const uploadModalOpen = ref(false);
+const downloadMenuOpen = ref(false);
+const downloadAsset = ref<SvgAsset | null>(null);
 const searchQuery = ref("");
 const selectedCategory = ref("");
 const sortOrder = ref("newest");
@@ -521,7 +534,7 @@ const loadAssets = async (restorePosition = false) => {
 };
 
 const handleUploaded = async () => {
-    showToast(t("uploadModal.upload") + " ✓", "success");
+    showToast(t("uploadModal.upload"), "success");
     await loadAssets();
 };
 
@@ -560,8 +573,11 @@ const handleFavorite = async (id: string, current: boolean) => {
     }
 };
 
-const handleDownload = () => {
-    showToast(t("dashboard.toast.downloaded"), "success");
+const handleDownload = (id: string) => {
+    const asset = assets.value.find((a) => a.id === id);
+    if (!asset) return;
+    downloadAsset.value = asset;
+    downloadMenuOpen.value = true;
 };
 
 const handleCopy = () => {

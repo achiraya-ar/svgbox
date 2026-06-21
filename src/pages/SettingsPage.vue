@@ -171,9 +171,9 @@
                             v-else-if="
                                 usernameOk && form.username !== originalUsername
                             "
-                            class="mt-1 text-xs text-accent font-prompt"
+                            class="mt-1 text-xs text-accent font-prompt flex items-center gap-1"
                         >
-                            ✓
+                            <Check :size="12" />
                             {{ t("settings.profileSection.usernameAvailable") }}
                         </p>
                         <p
@@ -280,8 +280,9 @@
                             />
                         </div>
                         <div class="text-xs text-textsecondary font-prompt">
-                            <p class="font-medium text-accent">
-                                ✓ {{ t("settings.avatarSection.previewLabel") }}
+                            <p class="font-medium text-accent flex items-center gap-1">
+                                <Check :size="12" />
+                                {{ t("settings.avatarSection.previewLabel") }}
                             </p>
                             <p class="mt-0.5">
                                 {{ t("settings.avatarSection.noPreview") }}

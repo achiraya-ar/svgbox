@@ -284,6 +284,35 @@
                 />
             </div>
 
+    <!-- Notice when an owner is signed in: their private/pending SVGs are
+         only visible in their dashboard. -->
+    <div
+        v-if="user && hasOwnNonPublicAssets"
+        class="mt-8 bg-soft/50 border border-border rounded-2xl px-5 py-4 flex items-start gap-3"
+    >
+        <div
+            class="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0"
+        >
+            <EyeOff :size="16" class="text-accent" />
+        </div>
+        <div class="flex-1">
+            <p
+                class="text-sm font-medium text-textprimary font-prompt mb-0.5"
+            >
+                {{ t("home.notice.privateAssets") }}
+            </p>
+            <p class="text-xs text-textsecondary font-prompt">
+                {{ t("home.notice.privateAssetsDesc") }}
+            </p>
+        </div>
+        <RouterLink
+            to="/collection"
+            class="shrink-0 px-3 py-1.5 rounded-xl bg-accent text-white text-xs font-prompt font-medium hover:bg-accent/90 transition-colors"
+        >
+            {{ t("home.notice.goToDashboard") }}
+        </RouterLink>
+    </div>
+
             <!-- Empty State -->
             <div
                 v-else
@@ -317,20 +346,32 @@
                 @dismiss="toast.message = ''"
             />
         </div>
+
+        <!-- Download menu (shared for all cards on this page) -->
+        <DownloadMenu
+            v-if="downloadAsset"
+            v-model="downloadMenuOpen"
+            :svg-code="downloadAsset.svg_code"
+            :filename="downloadAsset.name"
+            @downloaded="showToast('Downloaded', 'success')"
+        />
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { Search, X, Layers, Tag, Globe, PackageOpen } from "lucide-vue-next";
+import { Search, X, Layers, Tag, Globe, PackageOpen, EyeOff } from "lucide-vue-next";
 import { useI18n } from "../composables/useI18n";
 import DefaultLayout from "../layouts/DefaultLayout.vue";
 import SVGCard from "../components/SVGCard.vue";
 import ToastNotification from "../components/ToastNotification.vue";
+import DownloadMenu from "../components/DownloadMenu.vue";
+import type { SvgAsset } from "../types";
 import { useSvgAssets } from "../composables/useSvgAssets";
 import { useAuth } from "../composables/useAuth";
 import { useScrollRestoration } from "../composables/useScrollRestoration";
 import { useFavorites } from "../composables/useFavorites";
+import { RouterLink } from "vue-router";
 
 const { assets, loading, fetchAll } = useSvgAssets();
 const { user, refreshSession } = useAuth();
@@ -346,6 +387,10 @@ const localSearch = ref("");
 const selectedCategory = ref("");
 const tagFilter = ref("");
 
+// Download menu state
+const downloadMenuOpen = ref(false);
+const downloadAsset = ref<SvgAsset | null>(null);
+
 const allCategories = ["Illustration", "Icon", "Logo", "Animation", "Other"];
 
 const toast = ref<{ message: string; type: "success" | "error" | "info" }>({
@@ -360,9 +405,15 @@ const showToast = (
     toast.value = { message, type };
 };
 
-// Client-side filtering for instant feedback
+// Client-side filtering for instant feedback.
+// The home page is the PUBLIC catalog, so we only render assets that are
+// visible to everyone (approved + public).  RLS already blocks unauthorized
+// data, but we filter again client-side to keep the UI predictable for
+// signed-in owners (their own private/pending SVGs should not appear here).
 const filteredAssets = computed(() => {
-    let list = assets.value;
+    let list = assets.value.filter(
+        (a) => a.status === "approved" && a.is_private === false,
+    );
     if (localSearch.value.trim()) {
         const q = localSearch.value.toLowerCase();
         list = list.filter(
@@ -382,6 +433,15 @@ const filteredAssets = computed(() => {
         );
     }
     return list;
+});
+
+const hasOwnNonPublicAssets = computed(() => {
+    if (!user.value) return false;
+    return assets.value.some(
+        (a) =>
+            a.user_id === user.value!.id &&
+            (a.status !== "approved" || a.is_private === true),
+    );
 });
 
 const totalCount = computed(() => assets.value.length);
@@ -436,8 +496,11 @@ const handleFavorite = async (id: string, _current: boolean) => {
     }
 };
 
-const handleDownload = () => {
-    showToast(t("home.toast.downloaded"), "success");
+const handleDownload = (id: string) => {
+    const asset = assets.value.find((a) => a.id === id);
+    if (!asset) return;
+    downloadAsset.value = asset;
+    downloadMenuOpen.value = true;
 };
 
 const handleCopy = () => {

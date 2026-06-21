@@ -72,7 +72,7 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   if (to.meta.requiresAuth) {
-    // ⚠️  Use getSession() instead of getUser() to check auth.
+    // Use getSession() instead of getUser() to check auth.
     // getUser() makes a network round-trip to the auth server, but more
     // critically, both getUser() and getSession() acquire an internal
     // navigator.lock in Supabase gotrue-js v2.  When the browser tab is
