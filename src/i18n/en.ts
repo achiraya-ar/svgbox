@@ -31,6 +31,11 @@ const en = {
         "Try searching with a different keyword or clear the filters and try again",
       clearFilters: "Clear filters",
     },
+    notice: {
+      privateAssets: "You have private SVGs",
+      privateAssetsDesc: "Manage them in your collection",
+      goToDashboard: "My Collection",
+    },
     toast: {
       loginRequired: "Please log in first to add to favorites",
       favoriteAdded: "Added to favorites",

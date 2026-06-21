@@ -30,6 +30,11 @@ const th = {
       description: 'ลองค้นหาด้วยคำอื่น หรือล้างตัวกรองแล้วลองใหม่อีกครั้ง',
       clearFilters: 'ล้างตัวกรอง',
     },
+    notice: {
+      privateAssets: 'คุณมี SVG ส่วนตัว',
+      privateAssetsDesc: 'จัดการได้ในคอลเลกชันของคุณ',
+      goToDashboard: 'คอลเลกชัน',
+    },
     toast: {
       loginRequired: 'กรุณาเข้าสู่ระบบก่อนเพิ่มรายการโปรด',
       favoriteAdded: 'เพิ่มในรายการโปรดแล้ว',

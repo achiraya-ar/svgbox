@@ -374,11 +374,11 @@
                                 >(เจ้าของ)</span
                             >
                         </p>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3">
                             <!-- Edit -->
                             <button
                                 @click="openEditModal"
-                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-soft text-primary text-sm font-prompt font-medium hover:bg-primary hover:text-white transition-all duration-200"
+                                class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full bg-soft text-primary text-xs sm:text-sm font-prompt font-medium hover:bg-primary hover:text-white transition-all duration-200 whitespace-nowrap"
                             >
                                 <Pencil :size="15" />
                                 {{ t("svgDetail.owner.edit") }}
@@ -387,7 +387,7 @@
                             <!-- Delete -->
                             <button
                                 @click="confirmDeleteOpen = true"
-                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-red-50 text-red-500 text-sm font-prompt font-medium hover:bg-red-500 hover:text-white transition-all duration-200 border border-red-200 hover:border-red-500"
+                                class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full bg-red-50 text-red-500 text-xs sm:text-sm font-prompt font-medium hover:bg-red-500 hover:text-white transition-all duration-200 border border-red-200 hover:border-red-500 whitespace-nowrap"
                             >
                                 <Trash2 :size="15" />
                                 {{ t("svgDetail.owner.delete") }}
@@ -415,34 +415,24 @@
                         <!-- Status actions: Approve / Reject (only if not yet approved) -->
                         <div
                             v-if="asset.status === 'pending' || asset.status === 'rejected'"
-                            class="grid grid-cols-2 gap-2"
+                            class="grid grid-cols-2 gap-2 sm:gap-3"
                         >
                             <button
-                                v-if="asset.status === 'pending'"
-                                @click="handleQuickApprove"
+                                v-if="asset.status === 'pending' || asset.status === 'rejected'"
+                                @click="openReviewModal('approve')"
                                 :disabled="adminActionLoading"
-                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-500 text-white text-sm font-prompt font-medium hover:bg-green-600 shadow-sm transition-all duration-200 disabled:opacity-50"
+                                class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full bg-white text-green-500 text-xs sm:text-sm font-prompt font-medium hover:bg-green-500 hover:text-white border border-green-200 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
                             >
-                                <Loader2
-                                    v-if="adminActionLoading"
-                                    :size="15"
-                                    class="animate-spin"
-                                />
-                                <Check v-else :size="15" />
+                                <Check :size="15" />
                                 Approve
                             </button>
                             <button
-                                v-if="asset.status === 'rejected'"
-                                @click="handleQuickReject"
+                                v-if="asset.status === 'pending' || asset.status === 'rejected'"
+                                @click="openReviewModal('reject')"
                                 :disabled="adminActionLoading"
-                                class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-orange-500 text-sm font-prompt font-medium hover:bg-orange-500 hover:text-white border border-orange-200 transition-all duration-200 disabled:opacity-50"
+                                class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-full bg-white text-orange-500 text-xs sm:text-sm font-prompt font-medium hover:bg-orange-500 hover:text-white border border-orange-200 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
                             >
-                                <Loader2
-                                    v-if="adminActionLoading"
-                                    :size="15"
-                                    class="animate-spin"
-                                />
-                                <XCircle v-else :size="15" />
+                                <XCircle :size="15" />
                                 Reject
                             </button>
                         </div>
@@ -809,6 +799,134 @@
                 </Transition>
             </Teleport>
 
+            <!-- Admin Review Modal (Approve/Reject + public toggle) -->
+            <Teleport to="body">
+                <Transition name="modal">
+                    <div
+                        v-if="reviewModalOpen"
+                        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+                        @click.self="reviewModalOpen = false"
+                    >
+                        <div
+                            class="bg-surface rounded-2xl shadow-xl w-full max-w-md p-6 font-prompt"
+                        >
+                            <div class="flex items-center gap-3 mb-4">
+                                <div
+                                    :class="[
+                                        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                                        reviewAction === 'approve'
+                                            ? 'bg-green-100'
+                                            : 'bg-orange-100',
+                                    ]"
+                                >
+                                    <Check
+                                        v-if="reviewAction === 'approve'"
+                                        :size="18"
+                                        class="text-green-600"
+                                    />
+                                    <XCircle
+                                        v-else
+                                        :size="18"
+                                        class="text-orange-500"
+                                    />
+                                </div>
+                                <div>
+                                    <h3
+                                        class="text-base font-semibold text-textprimary font-prompt"
+                                    >
+                                        {{
+                                            reviewAction === "approve"
+                                                ? "Approve SVG"
+                                                : "Reject SVG"
+                                        }}
+                                    </h3>
+                                    <p
+                                        class="text-xs text-textsecondary font-prompt mt-0.5"
+                                    >
+                                        "{{ asset?.name }}"
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Visibility toggle (only when approving) -->
+                            <label
+                                v-if="reviewAction === 'approve'"
+                                class="flex items-start gap-3 bg-soft rounded-xl p-3 mb-5 cursor-pointer"
+                            >
+                                <input
+                                    v-model="reviewTogglePublic"
+                                    type="checkbox"
+                                    class="mt-0.5 w-4 h-4 accent-accent"
+                                />
+                                <div>
+                                    <p
+                                        class="text-sm font-medium text-textprimary font-prompt"
+                                    >
+                                        Make this SVG public
+                                    </p>
+                                    <p
+                                        class="text-xs text-textsecondary font-prompt mt-0.5"
+                                    >
+                                        If unchecked, the SVG stays private and
+                                        is only visible to the owner.
+                                    </p>
+                                </div>
+                            </label>
+
+                            <div
+                                v-else
+                                class="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-5"
+                            >
+                                <p
+                                    class="text-xs font-prompt text-orange-700"
+                                >
+                                    The owner will see that their SVG was
+                                    rejected. You can approve it later.
+                                </p>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    @click="reviewModalOpen = false"
+                                    :disabled="adminActionLoading"
+                                    class="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-prompt font-medium text-secondary hover:bg-soft transition-all duration-200 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    @click="confirmReview"
+                                    :disabled="adminActionLoading"
+                                    :class="[
+                                        'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-prompt font-medium transition-all duration-200 disabled:opacity-60',
+                                        reviewAction === 'approve'
+                                            ? 'bg-green-500 hover:bg-green-600'
+                                            : 'bg-orange-500 hover:bg-orange-600',
+                                    ]"
+                                >
+                                    <Loader2
+                                        v-if="adminActionLoading"
+                                        :size="15"
+                                        class="animate-spin"
+                                    />
+                                    <Check
+                                        v-else-if="reviewAction === 'approve'"
+                                        :size="15"
+                                    />
+                                    <XCircle v-else :size="15" />
+                                    {{
+                                        adminActionLoading
+                                            ? "Processing..."
+                                            : reviewAction === "approve"
+                                              ? "Approve"
+                                              : "Reject"
+                                    }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Transition>
+            </Teleport>
+
             <!-- Download Menu Modal -->
             <DownloadMenu
                 v-if="asset"
@@ -885,6 +1003,11 @@ const editModalOpen = ref(false);
 const confirmDeleteOpen = ref(false);
 const downloadMenuOpen = ref(false);
 
+// Admin review modal state (mirrors AdminPage flow)
+const reviewModalOpen = ref(false);
+const reviewAction = ref<"approve" | "reject">("approve");
+const reviewTogglePublic = ref(true);
+
 // Lock body scroll when any modal is open so background content can't be
 // scrolled, and to prevent the stacking-context issues that can cause clicks
 // to land on the wrong element.
@@ -892,7 +1015,8 @@ const anyModalOpen = computed(
     () =>
         editModalOpen.value ||
         confirmDeleteOpen.value ||
-        downloadMenuOpen.value,
+        downloadMenuOpen.value ||
+        reviewModalOpen.value,
 );
 watch(anyModalOpen, (open) => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -1169,33 +1293,36 @@ const handleDelete = async () => {
     }
 };
 
-const handleQuickApprove = async () => {
+const openReviewModal = (action: "approve" | "reject") => {
     if (!asset.value) return;
-    adminActionLoading.value = true;
-    try {
-        await adminReview(asset.value.id, "approved", !asset.value.is_private);
-        // Refresh local asset
-        const refreshed = await fetchById(asset.value.id);
-        if (refreshed) asset.value = refreshed;
-        showToast(t("svgDetail.toast.approved"), "success");
-    } catch (e: unknown) {
-        showToast(
-            e instanceof Error ? e.message : t("svgDetail.toast.error"),
-            "error",
-        );
-    } finally {
-        adminActionLoading.value = false;
-    }
+    reviewAction.value = action;
+    // Default to "make public" checked — admin can uncheck if they want the
+    // SVG to stay private after approval.
+    reviewTogglePublic.value = true;
+    reviewModalOpen.value = true;
 };
 
-const handleQuickReject = async () => {
+const confirmReview = async () => {
     if (!asset.value) return;
     adminActionLoading.value = true;
     try {
-        await adminReview(asset.value.id, "rejected", asset.value.is_private);
+        const newStatus =
+            reviewAction.value === "approve" ? "approved" : "rejected";
+        // For approve: the checkbox is "make public" — so uncheck means private.
+        // For reject: keep current visibility (the checkbox is not shown).
+        const makePrivate = reviewAction.value === "approve"
+            ? !reviewTogglePublic.value
+            : asset.value.is_private;
+        await adminReview(asset.value.id, newStatus, makePrivate);
         const refreshed = await fetchById(asset.value.id);
         if (refreshed) asset.value = refreshed;
-        showToast(t("svgDetail.toast.rejected"), "success");
+        showToast(
+            reviewAction.value === "approve"
+                ? t("svgDetail.toast.approved")
+                : t("svgDetail.toast.rejected"),
+            "success",
+        );
+        reviewModalOpen.value = false;
     } catch (e: unknown) {
         showToast(
             e instanceof Error ? e.message : t("svgDetail.toast.error"),
